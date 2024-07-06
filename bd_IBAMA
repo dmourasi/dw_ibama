@@ -1,0 +1,205 @@
+/* Quais as principais espécies mais apreendidas pelo IBAMA? */
+SELECT 
+    t.NOME_CIENTIFICO, 
+    COUNT(ea.SEQ_ESPECIME_APREENDIDO) AS QTD_APREENDIDA
+FROM 
+    especime_apreendido ea
+JOIN 
+    taxonomia t ON ea.taxonomia_SEQ_TAXONOMIA = t.SEQ_TAXONOMIA
+GROUP BY 
+    t.NOME_CIENTIFICO
+ORDER BY 
+    QTD_APREENDIDA DESC
+LIMIT 15;
+
+/* Quais localidades apresentam o maior número de apreensões de bens e espécimes? */
+SELECT 
+    l.NOM_MUNICIPIO,
+    l.SIG_UF,
+    COUNT(DISTINCT ea.SEQ_ESPECIME_APREENDIDO) AS QTD_ESPECIMES,
+    COUNT(DISTINCT ba.SEQ_BEM_APREENDIDO) AS QTD_BENS,
+    (COUNT(DISTINCT ea.SEQ_ESPECIME_APREENDIDO) + COUNT(DISTINCT ba.SEQ_BEM_APREENDIDO)) AS TOTAL_APREENSAO
+FROM 
+    localidade l
+LEFT JOIN 
+    especime_apreendido ea ON l.ID_TERMO = ea.ID_TERMO
+LEFT JOIN 
+    bem_apreendido ba ON l.ID_TERMO = ba.SEQ_TAD
+GROUP BY 
+    l.NOM_MUNICIPIO, l.SIG_UF
+ORDER BY 
+    TOTAL_APREENSAO DESC
+LIMIT 15;
+
+/* Quais são os principais tipos de espécimes apreendidos (animais, madeira, etc.) por região? */
+WITH RankedCities AS (
+    SELECT 
+        l.NOM_MUNICIPIO,
+        l.SIG_UF,
+        t.GRUPO AS TIPO_ESPECIME,
+        COUNT(ea.SEQ_ESPECIME_APREENDIDO) AS QTD_APREENDIDA,
+        ROW_NUMBER() OVER (PARTITION BY t.GRUPO ORDER BY COUNT(ea.SEQ_ESPECIME_APREENDIDO) DESC) AS rn
+    FROM 
+        localidade l
+    JOIN 
+        especime_apreendido ea ON l.ID_TERMO = ea.ID_TERMO
+    JOIN 
+        taxonomia t ON ea.taxonomia_SEQ_TAXONOMIA = t.SEQ_TAXONOMIA
+    GROUP BY 
+        l.NOM_MUNICIPIO, l.SIG_UF, t.GRUPO
+)
+SELECT 
+    NOM_MUNICIPIO,
+    SIG_UF,
+    TIPO_ESPECIME,
+    QTD_APREENDIDA
+FROM 
+    RankedCities
+WHERE 
+    rn <= 5
+ORDER BY 
+    TIPO_ESPECIME, QTD_APREENDIDA DESC;
+
+/* Quais são os períodos do ano com maior incidência de apreensões? */
+SELECT 
+    MONTH(DAT_TAD) AS MES,
+    COUNT(ID_TERMO) AS QTD_APREENSAO
+FROM 
+    termo_apreesao
+GROUP BY 
+    MES
+ORDER BY 
+    QTD_APREENSAO DESC;
+
+/* 
+SELECT 
+    l.NOM_MUNICIPIO,
+    l.SIG_UF,
+    t.NOME_CIENTIFICO,
+    MONTH(ta.DAT_TAD) AS MES,
+    COUNT(ea.SEQ_ESPECIME_APREENDIDO) AS QTD_APREENDIDA
+FROM 
+    ibama_db.localidade l
+JOIN 
+    ibama_db.especime_apreendido ea ON l.ID_TERMO = ea.ID_TERMO
+JOIN 
+    ibama_db.termo_apreensao ta ON l.ID_TERMO = ta.ID_TERMO
+JOIN 
+    ibama_db.taxonomia t ON ea.taxonomia_SEQ_TAXONOMIA = t.SEQ_TAXONOMIA
+GROUP BY 
+    l.NOM_MUNICIPIO, l.SIG_UF, t.NOME_CIENTIFICO, MES
+ORDER BY 
+    l.NOM_MUNICIPIO, l.SIG_UF, t.NOME_CIENTIFICO, MES;
+
+/* Existem padrões sazonais ou geográficos nas apreensões de espécies específicas?? */
+/* tendencia nos mêses de 3,5,7 e 11. */
+SELECT 
+    t.NOME_CIENTIFICO,
+    MONTH(ta.DAT_TAD) AS MES,
+    COUNT(ea.SEQ_ESPECIME_APREENDIDO) AS QTD_APREENDIDA
+FROM 
+    ibama_db.especime_apreendido ea
+JOIN 
+    ibama_db.termo_apreesao ta ON ea.ID_TERMO = ta.ID_TERMO
+JOIN 
+    ibama_db.taxonomia t ON ea.taxonomia_SEQ_TAXONOMIA = t.SEQ_TAXONOMIA
+GROUP BY 
+    t.NOME_CIENTIFICO, MES
+ORDER BY 
+    t.NOME_CIENTIFICO, MES;
+ /* existe uma tendência na região norte, principalmente no estado do PA e RR.*/
+SELECT 
+    l.NOM_MUNICIPIO,
+    l.SIG_UF,
+    t.NOME_CIENTIFICO,
+    COUNT(ea.SEQ_ESPECIME_APREENDIDO) AS QTD_APREENDIDA
+FROM 
+    ibama_db.localidade l
+JOIN 
+    ibama_db.especime_apreendido ea ON l.ID_TERMO = ea.ID_TERMO
+JOIN 
+    ibama_db.taxonomia t ON ea.taxonomia_SEQ_TAXONOMIA = t.SEQ_TAXONOMIA
+GROUP BY 
+    l.NOM_MUNICIPIO, l.SIG_UF, t.NOME_CIENTIFICO
+ORDER BY 
+    l.NOM_MUNICIPIO, l.SIG_UF, t.NOME_CIENTIFICO;
+
+/* Qual é a taxa de reincidência de responsáveis envolvidos em múltiplas apreensões? */
+SELECT 
+    CPF_CNPJ_APREENSAO,
+    COUNT(ID_TERMO) AS QTD_APREENSOES,
+    CASE 
+        WHEN COUNT(ID_TERMO) > 1 THEN 'Reincidente'
+        ELSE 'Não Reincidente'
+    END AS STATUS_REINCIDENCIA
+FROM 
+    ibama_db.responsavel
+GROUP BY 
+    CPF_CNPJ_APREENSAO
+ORDER BY 
+    QTD_APREENSOES DESC;
+    
+/* Quais são as regiões com mais apreensões de animais silvestres mortos? */    
+SELECT 
+    l.NOM_MUNICIPIO,
+    l.SIG_UF,
+    ea.SITUACAO_CARACTERISTICA,
+    COUNT(ea.SEQ_ESPECIME_APREENDIDO) AS QTD_APREENDIDA
+FROM 
+    ibama_db.localidade l
+JOIN 
+    ibama_db.especime_apreendido ea ON l.ID_TERMO = ea.ID_TERMO
+JOIN 
+    ibama_db.taxonomia t ON ea.taxonomia_SEQ_TAXONOMIA = t.SEQ_TAXONOMIA
+WHERE 
+    t.TIPO = 'fauna' AND 
+    ea.SITUACAO_CARACTERISTICA IN ('Morta', 'Abatida', 'Morta Morta', 'Morta Morto', 'Empalhada', 'Morto')
+GROUP BY 
+    l.NOM_MUNICIPIO, l.SIG_UF, ea.SITUACAO_CARACTERISTICA
+ORDER BY 
+    QTD_APREENDIDA DESC;
+
+
+
+/* Qual a quantidade de animais por situações encontradas? */
+SELECT 
+    ea.SITUACAO_CARACTERISTICA,
+    COUNT(ea.SEQ_ESPECIME_APREENDIDO) AS QTD_APREENDIDA
+FROM 
+    ibama_db.especime_apreendido ea
+JOIN 
+    ibama_db.taxonomia t ON ea.taxonomia_SEQ_TAXONOMIA = t.SEQ_TAXONOMIA
+WHERE 
+    t.TIPO = 'fauna'
+GROUP BY 
+    ea.SITUACAO_CARACTERISTICA
+ORDER BY 
+    QTD_APREENDIDA DESC;
+
+/*  Quais espécies ameaçadas de extinção são mais frequentemente apreendidas? */
+SELECT 
+    t.NOME_CIENTIFICO,
+    COUNT(ea.SEQ_ESPECIME_APREENDIDO) AS QTD_APREENDIDA
+FROM 
+    ibama_db.especime_apreendido ea
+JOIN 
+    ibama_db.taxonomia t ON ea.taxonomia_SEQ_TAXONOMIA = t.SEQ_TAXONOMIA
+WHERE 
+    t.CITES = 'S'
+GROUP BY 
+    t.NOME_CIENTIFICO
+ORDER BY 
+    QTD_APREENDIDA DESC
+LIMIT 15;
+
+/* Quais os tipos de bens mais apreendidos? */
+SELECT 
+    DES_TIPO_BEM,
+    COUNT(SEQ_BEM_APREENDIDO) AS QTD_APREENDIDA
+FROM 
+    ibama_db.bem_apreendido
+GROUP BY 
+    DES_TIPO_BEM
+ORDER BY 
+    QTD_APREENDIDA DESC
+LIMIT 15;
